@@ -1,0 +1,99 @@
+# Dependencias
+node_modules/
+*/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+*/package-lock.json
+yarn.lock
+*/yarn.lock
+
+# Archivos de entorno
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# Archivos de construcción
+build/
+dist/
+*/build/
+*/dist/
+
+# Archivos de caché
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+
+# Archivos de IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos del sistema
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Archivos temporales
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# Archivos de base de datos locales
+#*.db
+#*.sqlite
+#*.sqlite3
+
+# Archivos de Prisma generados
+prisma/migrations/
+!prisma/migrations/.gitkeep
+
+# Archivos de respaldo
+*.bak
+*.backup
+
+# Archivos de cobertura de pruebas
+coverage/
+.nyc_output/
+
+# Archivos de TypeScript
+*.tsbuildinfo
+
+# Archivos de React
+.eslintcache
+
+# Archivos de configuración local
+config.local.js
+config.local.json
+
+# Archivos de certificados SSL
+*.pem
+*.key
+*.crt
+
+# Archivos de uploads (si los hay)
+uploads/
+*/uploads/
+
+# Archivos de documentación generada automáticamente
+docs/generated/

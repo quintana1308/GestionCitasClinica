@@ -1,0 +1,345 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Modelo de usuarios base
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  phone     String?
+  avatar    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  roles     UserRole[]
+  client    Client?
+  employee  Employee?
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+// Roles del sistema
+model Role {
+  id          String @id @default(cuid())
+  name        String @unique // 'admin', 'employee', 'client'
+  description String
+  permissions Json   // Permisos específicos del rol
+
+  // Relaciones
+  users UserRole[]
+
+  @@map("roles")
+}
+
+// Tabla intermedia usuarios-roles
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  // Relaciones
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+// Información específica de clientes
+model Client {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  dateOfBirth       DateTime?
+  gender            String?
+  address           String?
+  emergencyContact  String?
+  medicalConditions String?
+  allergies         String?
+  clientCode        String    @unique // Código único para acceso inicial
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relaciones
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  payments     Payment[]
+  medicalHistory MedicalHistory[]
+
+  @@map("clients")
+}
+
+// Información específica de empleados
+model Employee {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  position     String   // 'doctor', 'nurse', 'receptionist', etc.
+  specialties  String?  // Especialidades médicas (separadas por comas)
+  schedule     Json?    // Horario de trabajo
+  salary       Decimal?
+  hireDate     DateTime
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relaciones
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@map("employees")
+}
+
+// Tratamientos disponibles
+model Treatment {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  duration    Int     // Duración en minutos
+  price       Decimal
+  category    String  // 'facial', 'corporal', 'laser', etc.
+  isActive    Boolean @default(true)
+  supplies    Json?   // Insumos necesarios
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  appointments AppointmentTreatment[]
+
+  @@map("treatments")
+}
+
+// Citas médicas
+model Appointment {
+  id          String            @id @default(cuid())
+  clientId    String
+  employeeId  String?
+  date        DateTime
+  startTime   DateTime
+  endTime     DateTime
+  status      AppointmentStatus @default(SCHEDULED)
+  notes       String?
+  totalAmount Decimal?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Relaciones
+  client     Client                 @relation(fields: [clientId], references: [id])
+  employee   Employee?              @relation(fields: [employeeId], references: [id])
+  treatments AppointmentTreatment[]
+  payments   Payment[]
+
+  @@map("appointments")
+}
+
+// Tabla intermedia citas-tratamientos
+model AppointmentTreatment {
+  id            String @id @default(cuid())
+  appointmentId String
+  treatmentId   String
+  quantity      Int    @default(1)
+  price         Decimal // Precio al momento de la cita
+  notes         String?
+
+  // Relaciones
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  treatment   Treatment   @relation(fields: [treatmentId], references: [id])
+
+  @@map("appointment_treatments")
+}
+
+// Estados de las citas
+enum AppointmentStatus {
+  SCHEDULED   // Programada
+  CONFIRMED   // Confirmada por el cliente
+  IN_PROGRESS // En progreso
+  COMPLETED   // Completada
+  CANCELLED   // Cancelada
+  NO_SHOW     // No se presentó
+}
+
+// Historial médico
+model MedicalHistory {
+  id          String   @id @default(cuid())
+  clientId    String
+  date        DateTime @default(now())
+  diagnosis   String?
+  treatment   String
+  notes       String?
+  attachments String?  // URLs de archivos adjuntos (separadas por comas)
+  createdBy   String   // ID del empleado que creó el registro
+
+  // Relaciones
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@map("medical_history")
+}
+
+// Inventario de insumos
+model Supply {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  category    String      // 'medicamento', 'equipo', 'consumible'
+  unit        String      // 'unidad', 'ml', 'gr', etc.
+  stock       Int         @default(0)
+  minStock    Int         @default(0)
+  maxStock    Int?
+  unitCost    Decimal
+  supplier    String?
+  expiryDate  DateTime?
+  status      SupplyStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relaciones
+  movements SupplyMovement[]
+  expenses  Expense[]
+
+  @@map("supplies")
+}
+
+// Estados de insumos
+enum SupplyStatus {
+  ACTIVE
+  LOW_STOCK
+  OUT_OF_STOCK
+  EXPIRED
+  DISCONTINUED
+}
+
+// Movimientos de inventario
+model SupplyMovement {
+  id        String           @id @default(cuid())
+  supplyId  String
+  type      MovementType
+  quantity  Int
+  unitCost  Decimal?
+  reason    String?
+  reference String?          // Referencia a cita, compra, etc.
+  createdBy String           // ID del usuario que hizo el movimiento
+  createdAt DateTime         @default(now())
+
+  // Relaciones
+  supply Supply @relation(fields: [supplyId], references: [id])
+
+  @@map("supply_movements")
+}
+
+// Tipos de movimiento de inventario
+enum MovementType {
+  IN      // Entrada
+  OUT     // Salida
+  ADJUST  // Ajuste
+  EXPIRED // Vencimiento
+}
+
+// Gastos
+model Expense {
+  id          String      @id @default(cuid())
+  description String
+  amount      Decimal
+  category    String      // 'insumos', 'servicios', 'equipos', etc.
+  date        DateTime    @default(now())
+  supplyId    String?     // Si está relacionado con un insumo
+  receipt     String?     // URL del comprobante
+  status      ExpenseStatus @default(PENDING)
+  createdBy   String      // ID del usuario que registró el gasto
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relaciones
+  supply Supply? @relation(fields: [supplyId], references: [id])
+
+  @@map("expenses")
+}
+
+// Estados de gastos
+enum ExpenseStatus {
+  PENDING   // Pendiente
+  APPROVED  // Aprobado
+  PAID      // Pagado
+  REJECTED  // Rechazado
+}
+
+// Pagos
+model Payment {
+  id            String        @id @default(cuid())
+  clientId      String
+  appointmentId String?
+  amount        Decimal
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  description   String?
+  transactionId String?       // ID de transacción externa
+  dueDate       DateTime?
+  paidDate      DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relaciones
+  client      Client       @relation(fields: [clientId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@map("payments")
+}
+
+// Métodos de pago
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  CHECK
+  FINANCING
+}
+
+// Estados de pago
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
+}
+
+// Auditoría del sistema
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // 'CREATE', 'UPDATE', 'DELETE'
+  entity    String   // Nombre de la tabla afectada
+  entityId  String   // ID del registro afectado
+  oldData   Json?    // Datos anteriores
+  newData   Json?    // Datos nuevos
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  // Relaciones
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// Configuración del sistema
+model SystemConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value Json
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_config")
+}

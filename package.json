@@ -1,0 +1,23 @@
+{
+  "name": "gestion-citas-clinica",
+  "version": "1.0.0",
+  "description": "Sistema de gestión de citas para clínica estética",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "cd server && npm run dev",
+    "client:dev": "cd client && npm start",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "db:generate": "cd server && npx prisma generate",
+    "db:migrate": "cd server && npx prisma migrate dev",
+    "db:studio": "cd server && npx prisma studio"
+  },
+  "keywords": ["clinica", "citas", "gestion", "estetica"],
+  "author": "Sistema de Gestión Clínica",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
