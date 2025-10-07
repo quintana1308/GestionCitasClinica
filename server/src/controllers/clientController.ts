@@ -27,15 +27,18 @@ export const getClients = async (
     
     if (search) {
       where.OR = [
-        { user: { firstName: { contains: search as string, mode: 'insensitive' } } },
-        { user: { lastName: { contains: search as string, mode: 'insensitive' } } },
-        { user: { email: { contains: search as string, mode: 'insensitive' } } },
-        { clientCode: { contains: search as string, mode: 'insensitive' } }
+        { user: { firstName: { contains: search as string } } },
+        { user: { lastName: { contains: search as string } } },
+        { user: { email: { contains: search as string } } },
+        { clientCode: { contains: search as string } }
       ];
     }
 
     if (isActive !== undefined) {
-      where.user = { isActive: isActive === 'true' };
+      where.user = { 
+        ...(where.user || {}),
+        isActive: isActive === 'true' 
+      };
     }
 
     // Obtener clientes con paginación

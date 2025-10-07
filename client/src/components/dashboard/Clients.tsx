@@ -104,10 +104,11 @@ const Clients: React.FC = () => {
   const handleToggleStatus = async (clientId: string, isActive: boolean) => {
     try {
       await clientService.toggleClientStatus(clientId, !isActive);
+      toast.success(`Cliente ${!isActive ? 'activado' : 'desactivado'} exitosamente`);
       fetchClients();
     } catch (err: any) {
       console.error('Error updating client status:', err);
-      setError(err.response?.data?.message || 'Error al actualizar el estado del cliente');
+      toast.error(err.response?.data?.message || 'Error al actualizar el estado del cliente');
     }
   };
 
@@ -326,13 +327,18 @@ const Clients: React.FC = () => {
                   <p className="text-sm text-gray-500">{client.clientCode}</p>
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-col items-end gap-1">
                 <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(client.user.isActive)}`}>
                   {getStatusText(client.user.isActive)}
                 </span>
                 <button
                   onClick={() => handleToggleStatus(client.id, client.user.isActive)}
-                  className="text-xs text-primary-600 hover:text-primary-700"
+                  className={`text-xs px-2 py-1 rounded ${
+                    client.user.isActive 
+                      ? 'text-red-600 hover:bg-red-50' 
+                      : 'text-green-600 hover:bg-green-50'
+                  }`}
+                  title={client.user.isActive ? 'Desactivar cliente' : 'Activar cliente'}
                 >
                   {client.user.isActive ? 'Desactivar' : 'Activar'}
                 </button>
