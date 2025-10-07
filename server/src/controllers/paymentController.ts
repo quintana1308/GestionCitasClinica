@@ -31,10 +31,10 @@ export const getPayments = async (
     
     if (search) {
       where.OR = [
-        { client: { user: { firstName: { contains: search as string, mode: 'insensitive' } } } },
-        { client: { user: { lastName: { contains: search as string, mode: 'insensitive' } } } },
-        { description: { contains: search as string, mode: 'insensitive' } },
-        { transactionId: { contains: search as string, mode: 'insensitive' } }
+        { client: { user: { firstName: { contains: search as string } } } },
+        { client: { user: { lastName: { contains: search as string } } } },
+        { description: { contains: search as string } },
+        { transactionId: { contains: search as string } }
       ];
     }
 
