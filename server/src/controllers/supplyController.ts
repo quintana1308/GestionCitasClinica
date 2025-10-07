@@ -29,9 +29,9 @@ export const getSupplies = async (
     
     if (search) {
       where.OR = [
-        { name: { contains: search as string, mode: 'insensitive' } },
-        { description: { contains: search as string, mode: 'insensitive' } },
-        { supplier: { contains: search as string, mode: 'insensitive' } }
+        { name: { contains: search as string } },
+        { description: { contains: search as string } },
+        { supplier: { contains: search as string } }
       ];
     }
 
