@@ -8,6 +8,7 @@ import Clients from '../components/dashboard/Clients';
 import Treatments from '../components/dashboard/Treatments';
 import Inventory from '../components/dashboard/Inventory';
 import Payments from '../components/dashboard/Payments';
+import Invoices from '../components/dashboard/Invoices';
 import Reports from '../components/dashboard/Reports';
 import Settings from '../components/dashboard/Settings';
 
@@ -25,6 +26,7 @@ const Dashboard: React.FC = () => {
             <Route path="/treatments" element={<Treatments />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/payments" element={<Payments />} />
+            <Route path="/invoices" element={<Invoices />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

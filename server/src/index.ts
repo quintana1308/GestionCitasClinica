@@ -16,6 +16,7 @@ import appointmentRoutes from './routes/appointments';
 import treatmentRoutes from './routes/treatments';
 import supplyRoutes from './routes/supplies';
 import paymentRoutes from './routes/payments';
+import invoiceRoutes from './routes/invoices';
 import dashboardRoutes from './routes/dashboard';
 import medicalHistoryRoutes from './routes/medicalHistory';
 
@@ -109,6 +110,7 @@ app.use('/api/appointments', appointmentRoutes);
 app.use('/api/treatments', treatmentRoutes);
 app.use('/api/supplies', supplyRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/invoices', invoiceRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/medical-history', medicalHistoryRoutes);
 

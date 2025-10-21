@@ -1,12 +1,13 @@
 import api from './authService';
 
-export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'CHECK' | 'FINANCING';
+export type PaymentMethod = 'UNDEFINED' | 'CASH' | 'CARD' | 'TRANSFER' | 'CHECK' | 'FINANCING';
 export type PaymentStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'REFUNDED';
 
 export interface Payment {
   id: string;
   clientId: string;
   appointmentId?: string;
+  invoiceId?: string; // Nueva relación con factura
   amount: number;
   method: PaymentMethod;
   status: PaymentStatus;

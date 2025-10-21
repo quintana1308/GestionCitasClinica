@@ -2,7 +2,7 @@ import { Response, NextFunction } from 'express';
 import { prisma } from '../index';
 import { AuthenticatedRequest, ApiResponse } from '../types';
 import { AppError } from '../middleware/errorHandler';
-import { AppointmentStatus } from '@prisma/client';
+import { AppointmentStatus, PaymentStatus, PaymentMethod } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
 // Obtener todas las citas con filtros y paginación
@@ -712,6 +712,42 @@ export const updateAppointmentStatus = async (
             createdBy: req.user!.id
           }
         });
+
+        // Crear factura pendiente para la cita confirmada
+        console.log('Creando factura pendiente para cita confirmada');
+        const invoiceAmount = Number(updatedAppointment.totalAmount);
+        
+        // Verificar si ya existe una factura para esta cita
+        const existingInvoice = await (tx as any).invoice?.findFirst({
+          where: {
+            appointmentId: updatedAppointment.id,
+            clientId: updatedAppointment.clientId
+          }
+        });
+
+        if (!existingInvoice && invoiceAmount > 0) {
+          try {
+            await (tx as any).invoice?.create({
+              data: {
+                clientId: updatedAppointment.clientId,
+                appointmentId: updatedAppointment.id,
+                amount: invoiceAmount,
+                status: 'PENDING', // Estado inicial de factura
+                description: `Factura por cita confirmada - ${treatmentNames}`,
+                dueDate: updatedAppointment.date // Fecha de vencimiento igual a la fecha de la cita
+              }
+            });
+            console.log(`Factura pendiente creada por $${invoiceAmount} para la cita ${updatedAppointment.id}`);
+          } catch (invoiceError) {
+            console.error('Error creando factura automática:', invoiceError);
+            // Continuar sin crear la factura para no bloquear la confirmación de la cita
+            console.log('Continuando sin crear factura automática...');
+          }
+        } else if (existingInvoice) {
+          console.log('Ya existe una factura para esta cita, no se crea una nueva');
+        } else {
+          console.log('No se crea factura porque el monto total es 0');
+        }
       } else if (status === 'CANCELLED' && existingAppointment.status !== 'CANCELLED') {
         // Cita cancelada (desde cualquier estado) - Solo si no estaba ya cancelada
         console.log('Creando registro de historial para cita cancelada');
@@ -746,6 +782,29 @@ export const updateAppointmentStatus = async (
             }
           });
           console.log('Registro de cancelación creado exitosamente');
+
+          // Cancelar factura pendiente asociada si existe
+          console.log('Verificando si existe factura pendiente para cancelar');
+          const pendingInvoice = await (tx as any).invoice?.findFirst({
+            where: {
+              appointmentId: updatedAppointment.id,
+              clientId: updatedAppointment.clientId,
+              status: 'PENDING'
+            }
+          });
+
+          if (pendingInvoice) {
+            await (tx as any).invoice?.update({
+              where: { id: pendingInvoice.id },
+              data: { 
+                status: 'CANCELLED',
+                description: `${pendingInvoice.description} - CANCELADA por cancelación de cita`
+              }
+            });
+            console.log(`Factura pendiente ${pendingInvoice.id} cancelada automáticamente`);
+          } else {
+            console.log('No se encontró factura pendiente para cancelar');
+          }
         } else {
           console.log('Ya existe un registro de cancelación para esta cita');
         }

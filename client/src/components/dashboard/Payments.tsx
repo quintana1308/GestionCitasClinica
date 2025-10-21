@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   PlusIcon, 
   CreditCardIcon, 
@@ -7,15 +8,17 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
   MagnifyingGlassIcon,
-  CalendarIcon
+  CalendarIcon,
+  PencilIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
-import { paymentService, Payment, PaymentFilters, CreatePaymentData, PaymentMethod, PaymentStatus, PaymentStats } from '../../services/paymentService';
-import { clientService, Client } from '../../services/clientService';
-import { appointmentService } from '../../services/appointmentService';
+import { paymentService, Payment, PaymentFilters, PaymentMethod, PaymentStatus, PaymentStats } from '../../services/paymentService';
 import Modal from '../Modal';
 
 const Payments: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,49 +40,28 @@ const Payments: React.FC = () => {
     pages: 0
   });
   const [stats, setStats] = useState<PaymentStats | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [appointments, setAppointments] = useState<any[]>([]);
-  const [searchClientTerm, setSearchClientTerm] = useState('');
-  
-  const [formData, setFormData] = useState<CreatePaymentData>({
-    clientId: '',
-    appointmentId: '',
-    amount: 0,
-    method: 'CASH',
-    description: '',
-    transactionId: '',
-    dueDate: ''
-  });
 
   useEffect(() => {
     fetchPayments();
     fetchStats();
   }, [filters]);
 
-  useEffect(() => {
-    if (showCreateModal) {
-      fetchClients();
-    }
-  }, [showCreateModal]);
 
+  // Efecto para abrir automáticamente un pago específico desde URL
   useEffect(() => {
-    if (formData.clientId) {
-      fetchClientAppointments(formData.clientId);
+    const paymentId = searchParams.get('paymentId');
+    if (paymentId && payments.length > 0) {
+      const payment = payments.find(p => p.id === paymentId);
+      if (payment) {
+        handleOpenDetailsModal(payment);
+        // Limpiar el parámetro de la URL
+        navigate('/dashboard/payments', { replace: true });
+      }
     }
-  }, [formData.clientId]);
+  }, [payments, searchParams, navigate]);
 
-  useEffect(() => {
-    if (searchClientTerm) {
-      const timer = setTimeout(() => {
-        fetchClients(searchClientTerm);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [searchClientTerm]);
 
   const fetchPayments = async () => {
     try {
@@ -104,31 +86,6 @@ const Payments: React.FC = () => {
     }
   };
 
-  const fetchClients = async (search?: string) => {
-    try {
-      const response = await clientService.getClients({
-        search: search || '',
-        isActive: true,
-        limit: 50
-      });
-      setClients(response.clients);
-    } catch (err: any) {
-      console.error('Error fetching clients:', err);
-    }
-  };
-
-  const fetchClientAppointments = async (clientId: string) => {
-    try {
-      const response = await appointmentService.getAppointments({
-        clientId,
-        limit: 100
-      });
-      setAppointments(response.appointments || []);
-    } catch (err: any) {
-      console.error('Error fetching appointments:', err);
-      setAppointments([]);
-    }
-  };
 
   const handleSearch = (searchTerm: string) => {
     setFilters(prev => ({
@@ -146,46 +103,18 @@ const Payments: React.FC = () => {
     }));
   };
 
-  const handleOpenCreateModal = () => {
-    setFormData({
-      clientId: '',
-      appointmentId: '',
-      amount: 0,
-      method: 'CASH',
-      description: '',
-      transactionId: '',
-      dueDate: ''
-    });
-    setSearchClientTerm('');
-    setAppointments([]);
-    setShowCreateModal(true);
-  };
 
   const handleOpenDetailsModal = (payment: Payment) => {
     setSelectedPayment(payment);
     setShowDetailsModal(true);
   };
 
-  const handleCreatePayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.clientId || formData.amount <= 0) {
-      toast.error('Por favor completa todos los campos obligatorios');
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      await paymentService.createPayment(formData);
-      toast.success('Pago registrado exitosamente');
-      setShowCreateModal(false);
-      fetchPayments();
-      fetchStats();
-    } catch (err: any) {
-      console.error('Error creating payment:', err);
-      toast.error(err.response?.data?.message || 'Error al registrar el pago');
-    } finally {
-      setSubmitting(false);
+  const handleViewInvoice = (payment: Payment) => {
+    if (payment.invoiceId) {
+      // Navegar a la página de facturas con la factura específica seleccionada
+      navigate(`/dashboard/invoices?invoiceId=${payment.invoiceId}`);
+    } else {
+      toast.error('Este pago no está asociado a una factura');
     }
   };
 
@@ -199,19 +128,11 @@ const Payments: React.FC = () => {
         if (showDetailsModal) {
           setShowDetailsModal(false);
         }
-      } catch (err: any) {
-        console.error('Error marking payment as paid:', err);
-        toast.error(err.response?.data?.message || 'Error al actualizar el pago');
+      } catch (error: any) {
+        console.error('Error marking payment as paid:', error);
+        toast.error(error.response?.data?.message || 'Error al actualizar el pago');
       }
     }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ 
-      ...prev, 
-      [name]: name === 'amount' ? Number(value) : value 
-    }));
   };
 
   if (loading) {
@@ -270,8 +191,15 @@ const Payments: React.FC = () => {
     }
   };
 
-  const getMethodIcon = (method: PaymentMethod) => {
+  const getMethodIcon = (method: PaymentMethod, payment?: Payment) => {
+    // Si es un pago automático, mostrar ícono de advertencia independientemente del método
+    if (payment && isAutomaticPayment(payment)) {
+      return <ExclamationTriangleIcon className="h-5 w-5 text-amber-500" />;
+    }
+    
     switch (method) {
+      case 'UNDEFINED':
+        return <ExclamationTriangleIcon className="h-5 w-5 text-amber-500" />;
       case 'CARD':
         return <CreditCardIcon className="h-5 w-5" />;
       case 'CASH':
@@ -287,8 +215,15 @@ const Payments: React.FC = () => {
     }
   };
 
-  const getMethodText = (method: PaymentMethod) => {
+  const getMethodText = (method: PaymentMethod, payment?: Payment) => {
+    // Si es un pago automático, mostrar "Sin definir" independientemente del método
+    if (payment && isAutomaticPayment(payment)) {
+      return 'Sin definir';
+    }
+    
     switch (method) {
+      case 'UNDEFINED':
+        return 'Sin definir';
       case 'CARD':
         return 'Tarjeta';
       case 'CASH':
@@ -309,14 +244,12 @@ const Payments: React.FC = () => {
     return new Date(dueDate) < new Date();
   };
 
-  const formatDate = (date?: Date) => {
+  const formatDate = (date?: Date | string) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('es-ES', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric'
     });
   };
 
@@ -331,6 +264,23 @@ const Payments: React.FC = () => {
     return payment.appointment.treatments.map(t => t.treatment.name).join(', ');
   };
 
+  const isAutomaticPayment = (payment: Payment) => {
+    return payment.method === 'UNDEFINED' || !payment.method;
+  };
+
+  const getMostUsedMethod = (): PaymentMethod => {
+    if (payments.length === 0) return 'CASH';
+    
+    const methodCounts = payments.reduce((acc, payment) => {
+      const method = payment.method || 'UNDEFINED';
+      acc[method] = (acc[method] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(methodCounts)
+      .sort(([,a], [,b]) => b - a)[0][0] as PaymentMethod;
+  };
+
   const totalPaid = payments.filter(p => p.status === 'PAID').reduce((sum, p) => sum + Number(p.amount), 0);
   const totalPending = payments.filter(p => p.status === 'PENDING').reduce((sum, p) => sum + Number(p.amount), 0);
   const totalOverdue = payments.filter(p => p.status === 'OVERDUE').reduce((sum, p) => sum + Number(p.amount), 0);
@@ -340,58 +290,62 @@ const Payments: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestión de Pagos</h1>
-          <p className="text-gray-600">Control de pagos y facturación de clientes</p>
+          <h1 className="text-2xl font-bold text-gray-900">Historial de Pagos</h1>
+          <p className="text-gray-600">Visualización y seguimiento de abonos realizados</p>
         </div>
-        <button onClick={handleOpenCreateModal} className="btn-primary flex items-center">
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Registrar Pago
-        </button>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="card">
           <div className="flex items-center">
+            <div className="p-3 rounded-full bg-blue-100">
+              <CreditCardIcon className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total de Abonos</p>
+              <p className="text-2xl font-bold text-blue-600">{payments.length}</p>
+              <p className="text-xs text-gray-500">Registros de pagos</p>
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="flex items-center">
             <div className="p-3 rounded-full bg-green-100">
               <CheckCircleIcon className="h-6 w-6 text-green-600" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Pagos Completados</p>
+              <p className="text-sm font-medium text-gray-600">Abonos Procesados</p>
               <p className="text-2xl font-bold text-green-600">${totalPaid.toFixed(2)}</p>
+              <p className="text-xs text-gray-500">Dinero recibido</p>
             </div>
           </div>
         </div>
         <div className="card">
           <div className="flex items-center">
-            <div className="p-3 rounded-full bg-yellow-100">
-              <BanknotesIcon className="h-6 w-6 text-yellow-600" />
+            <div className="p-3 rounded-full bg-purple-100">
+              <BanknotesIcon className="h-6 w-6 text-purple-600" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Pagos Pendientes</p>
-              <p className="text-2xl font-bold text-yellow-600">${totalPending.toFixed(2)}</p>
+              <p className="text-sm font-medium text-gray-600">Método Más Usado</p>
+              <p className="text-lg font-bold text-purple-600">
+                {payments.length > 0 ? getMethodText(getMostUsedMethod()) : 'N/A'}
+              </p>
+              <p className="text-xs text-gray-500">Forma de pago preferida</p>
             </div>
           </div>
         </div>
         <div className="card">
           <div className="flex items-center">
-            <div className="p-3 rounded-full bg-red-100">
-              <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+            <div className="p-3 rounded-full bg-orange-100">
+              <DocumentTextIcon className="h-6 w-6 text-orange-600" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Pagos Vencidos</p>
-              <p className="text-2xl font-bold text-red-600">${totalOverdue.toFixed(2)}</p>
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-primary-100">
-              <CreditCardIcon className="h-6 w-6 text-primary-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Facturado</p>
-              <p className="text-2xl font-bold text-primary-600">${(totalPaid + totalPending + totalOverdue).toFixed(2)}</p>
+              <p className="text-sm font-medium text-gray-600">Facturas Vinculadas</p>
+              <p className="text-2xl font-bold text-orange-600">
+                {payments.filter(p => p.invoiceId).length}
+              </p>
+              <p className="text-xs text-gray-500">Con factura asociada</p>
             </div>
           </div>
         </div>
@@ -444,6 +398,7 @@ const Payments: React.FC = () => {
               onChange={(e) => handleFilterChange('method', e.target.value as PaymentMethod | '')}
             >
               <option value="">Todos</option>
+              <option value="UNDEFINED">Sin definir</option>
               <option value="CASH">Efectivo</option>
               <option value="CARD">Tarjeta</option>
               <option value="TRANSFER">Transferencia</option>
@@ -498,7 +453,7 @@ const Payments: React.FC = () => {
                   Estado
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fecha Vencimiento
+                  Fecha del Pago
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Acciones
@@ -539,9 +494,9 @@ const Payments: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        {getMethodIcon(payment.method)}
+                        {getMethodIcon(payment.method, payment)}
                         <span className="ml-2 text-sm text-gray-900">
-                          {getMethodText(payment.method)}
+                          {getMethodText(payment.method, payment)}
                         </span>
                       </div>
                     </td>
@@ -551,24 +506,44 @@ const Payments: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className={`text-sm ${payment.status === 'OVERDUE' || (payment.status === 'PENDING' && isOverdue(payment.dueDate)) ? 'text-red-600 font-medium' : 'text-gray-900'}`}>
-                        {formatDate(payment.dueDate)}
-                      </div>
-                      {payment.paidDate && (
-                        <div className="text-xs text-gray-500">
-                          Pagado: {formatDate(payment.paidDate)}
+                      {payment.paidDate ? (
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {formatDate(payment.paidDate)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Fecha de pago
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className={`text-sm ${payment.status === 'OVERDUE' || (payment.status === 'PENDING' && isOverdue(payment.dueDate)) ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                            {payment.dueDate ? formatDate(payment.dueDate) : 'Sin fecha'}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Vence
+                          </div>
                         </div>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex space-x-2 justify-end">
-                        {payment.status !== 'PAID' && payment.status !== 'CANCELLED' && (
+                        {payment.status !== 'PAID' && payment.status !== 'CANCELLED' && !isAutomaticPayment(payment) && (
                           <button 
                             onClick={() => handleMarkAsPaid(payment.id)}
                             className="text-green-600 hover:text-green-900 flex items-center"
                           >
                             <CheckCircleIcon className="h-4 w-4 mr-1" />
                             Marcar Pagado
+                          </button>
+                        )}
+                        {payment.invoiceId && (
+                          <button 
+                            onClick={() => handleViewInvoice(payment)}
+                            className="text-purple-600 hover:text-purple-900 flex items-center"
+                          >
+                            <DocumentTextIcon className="h-4 w-4 mr-1" />
+                            Ver Factura
                           </button>
                         )}
                         <button 
@@ -588,170 +563,6 @@ const Payments: React.FC = () => {
         </div>
       </div>
 
-      {/* Create Payment Modal */}
-      <Modal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        title="Registrar Nuevo Pago"
-        size="lg"
-      >
-        <form onSubmit={handleCreatePayment} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cliente <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Buscar cliente..."
-                className="input-field"
-                value={searchClientTerm}
-                onChange={(e) => setSearchClientTerm(e.target.value)}
-                onFocus={() => fetchClients()}
-              />
-              {clients.length > 0 && searchClientTerm && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                  {clients.map((client) => (
-                    <button
-                      key={client.id}
-                      type="button"
-                      onClick={() => {
-                        setFormData(prev => ({ ...prev, clientId: client.id }));
-                        setSearchClientTerm(`${client.user.firstName} ${client.user.lastName}`);
-                      }}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="font-medium">{client.user.firstName} {client.user.lastName}</div>
-                        <div className="text-sm text-gray-500">{client.user.email}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {formData.clientId && appointments.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cita Asociada (Opcional)
-              </label>
-              <select
-                name="appointmentId"
-                value={formData.appointmentId}
-                onChange={handleInputChange}
-                className="input-field"
-              >
-                <option value="">Sin cita asociada</option>
-                {appointments.map((apt: any) => (
-                  <option key={apt.id} value={apt.id}>
-                    {new Date(apt.date).toLocaleDateString('es-ES')} - {apt.treatments?.map((t: any) => t.treatment.name).join(', ')}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Monto ($) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                name="amount"
-                value={formData.amount}
-                onChange={handleInputChange}
-                className="input-field"
-                min="0"
-                step="0.01"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Método de Pago <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="method"
-                value={formData.method}
-                onChange={handleInputChange}
-                className="input-field"
-                required
-              >
-                <option value="CASH">Efectivo</option>
-                <option value="CARD">Tarjeta</option>
-                <option value="TRANSFER">Transferencia</option>
-                <option value="CHECK">Cheque</option>
-                <option value="FINANCING">Financiamiento</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                ID de Transacción
-              </label>
-              <input
-                type="text"
-                name="transactionId"
-                value={formData.transactionId}
-                onChange={handleInputChange}
-                className="input-field"
-                placeholder="Ej: TRX123456"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fecha de Vencimiento
-              </label>
-              <input
-                type="date"
-                name="dueDate"
-                value={formData.dueDate}
-                onChange={handleInputChange}
-                className="input-field"
-                min={new Date().toISOString().split('T')[0]}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Descripción / Notas
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              className="input-field"
-              rows={3}
-              placeholder="Detalles adicionales del pago..."
-            />
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(false)}
-              className="btn-outline"
-              disabled={submitting}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={submitting}
-            >
-              {submitting ? 'Registrando...' : 'Registrar Pago'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
       {/* Payment Details Modal */}
       <Modal
         isOpen={showDetailsModal}
@@ -767,13 +578,21 @@ const Payments: React.FC = () => {
                 {getStatusText(selectedPayment.status)}
               </span>
               {selectedPayment.status !== 'PAID' && selectedPayment.status !== 'CANCELLED' && (
-                <button
-                  onClick={() => handleMarkAsPaid(selectedPayment.id)}
-                  className="btn-primary text-sm flex items-center"
-                >
-                  <CheckCircleIcon className="h-4 w-4 mr-1" />
-                  Marcar como Pagado
-                </button>
+                <>
+                  {!isAutomaticPayment(selectedPayment) ? (
+                    <button
+                      onClick={() => handleMarkAsPaid(selectedPayment.id)}
+                      className="btn-primary text-sm flex items-center"
+                    >
+                      <CheckCircleIcon className="h-4 w-4 mr-1" />
+                      Marcar como Pagado
+                    </button>
+                  ) : (
+                    <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800">
+                      ⚠️ Pago automático - Gestionar desde Facturas
+                    </span>
+                  )}
+                </>
               )}
             </div>
 
@@ -809,8 +628,8 @@ const Payments: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Método de Pago:</span>
                   <div className="flex items-center">
-                    {getMethodIcon(selectedPayment.method)}
-                    <span className="ml-2 text-sm font-medium text-gray-900">{getMethodText(selectedPayment.method)}</span>
+                    {getMethodIcon(selectedPayment.method, selectedPayment)}
+                    <span className="ml-2 text-sm font-medium text-gray-900">{getMethodText(selectedPayment.method, selectedPayment)}</span>
                   </div>
                 </div>
                 {selectedPayment.transactionId && (
@@ -888,6 +707,7 @@ const Payments: React.FC = () => {
           </div>
         )}
       </Modal>
+
     </div>
   );
 };

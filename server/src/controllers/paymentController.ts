@@ -179,6 +179,7 @@ export const createPayment = async (
     const {
       clientId,
       appointmentId,
+      invoiceId,
       amount,
       method,
       description,
@@ -188,6 +189,10 @@ export const createPayment = async (
 
     if (!clientId || !amount || !method) {
       throw new AppError('Cliente, monto y método de pago son requeridos', 400);
+    }
+
+    if (!invoiceId) {
+      throw new AppError('ID de factura es requerido para crear un abono', 400);
     }
 
     if (amount <= 0) {
@@ -207,6 +212,32 @@ export const createPayment = async (
       throw new AppError('Cliente no encontrado', 404);
     }
 
+    // Verificar que la factura existe y pertenece al cliente
+    const invoice = await (prisma as any).invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        payments: {
+          where: { status: PaymentStatus.PAID }
+        }
+      }
+    });
+
+    if (!invoice) {
+      throw new AppError('Factura no encontrada', 404);
+    }
+
+    if (invoice.clientId !== clientId) {
+      throw new AppError('La factura no pertenece al cliente especificado', 400);
+    }
+
+    // Verificar que el abono no exceda el monto pendiente
+    const paidAmount = invoice.payments.reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
+    const pendingAmount = Number(invoice.amount) - paidAmount;
+
+    if (amount > pendingAmount) {
+      throw new AppError(`El abono ($${amount}) excede el monto pendiente ($${pendingAmount.toFixed(2)})`, 400);
+    }
+
     // Verificar que la cita existe (si se especifica)
     if (appointmentId) {
       const appointment = await prisma.appointment.findUnique({
@@ -222,15 +253,17 @@ export const createPayment = async (
       }
     }
 
-    const newPayment = await prisma.payment.create({
+    const newPayment = await (prisma as any).payment.create({
       data: {
         clientId,
         appointmentId,
+        invoiceId, // Nueva relación con factura
         amount: Number(amount),
         method,
-        status: PaymentStatus.PENDING,
-        description,
+        status: PaymentStatus.PAID, // Los abonos se marcan como pagados directamente
+        description: description || `Abono a factura ${invoiceId}`,
         transactionId,
+        paidDate: new Date(), // Fecha de pago
         dueDate: dueDate ? new Date(dueDate) : null
       },
       include: {
@@ -254,6 +287,43 @@ export const createPayment = async (
       }
     });
 
+    // Actualizar automáticamente el estado de la factura
+    try {
+      // Recalcular el estado de la factura
+      const updatedInvoice = await (prisma as any).invoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+          payments: {
+            where: { status: PaymentStatus.PAID }
+          }
+        }
+      });
+
+      if (updatedInvoice) {
+        const totalPaid = updatedInvoice.payments.reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
+        const totalAmount = Number(updatedInvoice.amount);
+        
+        let newStatus = updatedInvoice.status;
+        
+        if (totalPaid >= totalAmount) {
+          newStatus = 'PAID';
+        } else if (totalPaid > 0) {
+          newStatus = 'PARTIAL';
+        }
+
+        if (newStatus !== updatedInvoice.status) {
+          await (prisma as any).invoice.update({
+            where: { id: invoiceId },
+            data: { status: newStatus }
+          });
+          console.log(`Estado de factura ${invoiceId} actualizado a ${newStatus}`);
+        }
+      }
+    } catch (invoiceUpdateError) {
+      console.error('Error actualizando estado de factura:', invoiceUpdateError);
+      // No fallar la creación del pago por este error
+    }
+
     // Registrar auditoría
     await prisma.auditLog.create({
       data: {
@@ -269,7 +339,7 @@ export const createPayment = async (
 
     const response: ApiResponse = {
       success: true,
-      message: 'Pago creado exitosamente',
+      message: 'Abono registrado exitosamente y estado de factura actualizado',
       data: { payment: newPayment }
     };
 
@@ -481,6 +551,13 @@ export const markPaymentAsPaid = async (
 
     if (existingPayment.status === PaymentStatus.PAID) {
       throw new AppError('El pago ya está marcado como pagado', 400);
+    }
+
+    // Temporal: verificar si es un pago automático que necesita ser configurado
+    if (existingPayment.description?.includes('Pago por cita confirmada') && 
+        !existingPayment.transactionId && 
+        existingPayment.method === 'CASH') {
+      throw new AppError('Este pago fue creado automáticamente. Primero debe registrar el método de pago y detalles antes de marcarlo como pagado.', 400);
     }
 
     const updatedPayment = await prisma.payment.update({

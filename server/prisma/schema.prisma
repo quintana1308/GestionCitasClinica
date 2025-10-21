@@ -77,6 +77,7 @@ model Client {
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   appointments Appointment[]
   payments     Payment[]
+  invoices     Invoice[]      // Nueva relación con facturas
   medicalHistory MedicalHistory[]
   appointmentRecords AppointmentRecord[]
   documents    Document[]
@@ -145,6 +146,7 @@ model Appointment {
   employee   Employee?              @relation(fields: [employeeId], references: [id])
   treatments AppointmentTreatment[]
   payments   Payment[]
+  invoices   Invoice[]              // Nueva relación con facturas
   record     AppointmentRecord?
 
   @@map("appointments")
@@ -281,10 +283,31 @@ enum ExpenseStatus {
 }
 
 // Pagos
+// Facturas
+model Invoice {
+  id            String        @id @default(cuid())
+  clientId      String
+  appointmentId String?
+  amount        Decimal
+  status        InvoiceStatus @default(PENDING)
+  description   String?
+  dueDate       DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relaciones
+  client      Client       @relation(fields: [clientId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  payments    Payment[]    // Una factura puede tener múltiples pagos
+
+  @@map("invoices")
+}
+
 model Payment {
   id            String        @id @default(cuid())
   clientId      String
   appointmentId String?
+  invoiceId     String?       // Nueva relación con factura
   amount        Decimal
   method        PaymentMethod
   status        PaymentStatus @default(PENDING)
@@ -298,12 +321,14 @@ model Payment {
   // Relaciones
   client      Client       @relation(fields: [clientId], references: [id])
   appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  invoice     Invoice?     @relation(fields: [invoiceId], references: [id])
 
   @@map("payments")
 }
 
 // Métodos de pago
 enum PaymentMethod {
+  UNDEFINED  // Método no definido - se debe registrar después
   CASH
   CARD
   TRANSFER
@@ -311,10 +336,20 @@ enum PaymentMethod {
   FINANCING
 }
 
+// Estados de facturas
+enum InvoiceStatus {
+  PENDING   // Pendiente - sin pagos
+  PARTIAL   // Parcial - pagos < monto total
+  PAID      // Pagado - pagos = monto total
+  OVERDUE   // Vencido - fecha vencida y no pagado
+  CANCELLED // Cancelado
+}
+
 // Estados de pago
 enum PaymentStatus {
   PENDING
   PAID
+  PARTIAL
   OVERDUE
   CANCELLED
   REFUNDED
