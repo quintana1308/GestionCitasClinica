@@ -7,11 +7,13 @@ import {
   EyeIcon,
   PencilIcon,
   TrashIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { clientService, Client, ClientFilters, CreateClientData, UpdateClientData } from '../../services/clientService';
 import Modal from '../Modal';
+import ClientDetailsModal from '../ClientDetailsModal';
 
 const Clients: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
@@ -33,6 +35,7 @@ const Clients: React.FC = () => {
   });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [formData, setFormData] = useState<CreateClientData>({
     email: '',
@@ -378,6 +381,16 @@ const Clients: React.FC = () => {
             </div>
 
             <div className="flex space-x-2 mt-4">
+              <button 
+                onClick={() => {
+                  setSelectedClient(client);
+                  setShowDetailsModal(true);
+                }}
+                className="flex-1 btn-primary text-sm py-2 flex items-center justify-center"
+              >
+                <DocumentTextIcon className="h-4 w-4 mr-1" />
+                Historial
+              </button>
               <button 
                 onClick={() => handleOpenEditModal(client)}
                 className="flex-1 btn-outline text-sm py-2 flex items-center justify-center"
@@ -778,6 +791,16 @@ const Clients: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Modal de detalles del cliente con historial médico */}
+      <ClientDetailsModal
+        isOpen={showDetailsModal}
+        onClose={() => {
+          setShowDetailsModal(false);
+          setSelectedClient(null);
+        }}
+        client={selectedClient}
+      />
     </div>
   );
 };

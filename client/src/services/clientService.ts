@@ -3,15 +3,15 @@ import api from './authService';
 export interface Client {
   id: string;
   userId: string;
-  dateOfBirth?: Date;
+  dateOfBirth?: Date | string;
   gender?: string;
   address?: string;
   emergencyContact?: string;
   medicalConditions?: string;
   allergies?: string;
   clientCode: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   user: {
     id: string;
     email: string;
@@ -19,8 +19,8 @@ export interface Client {
     lastName: string;
     phone?: string;
     isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: Date | string;
+    updatedAt: Date | string;
   };
   appointments?: any[];
   payments?: any[];

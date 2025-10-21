@@ -217,8 +217,20 @@ export const createAppointment = async (
       throw new AppError('La hora de inicio debe ser anterior a la hora de fin', 400);
     }
 
-    if (appointmentDate < new Date()) {
-      throw new AppError('No se pueden crear citas en fechas pasadas', 400);
+    // Validar que la fecha y hora de inicio no sean en el pasado
+    const now = new Date();
+    
+    if (appointmentStartTime <= now) {
+      const appointmentDateOnly = new Date(appointmentDate);
+      appointmentDateOnly.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (appointmentDateOnly < today) {
+        throw new AppError('No se pueden crear citas en fechas pasadas', 400);
+      } else {
+        throw new AppError('No se pueden crear citas en horarios que ya han pasado. Por favor selecciona una hora futura', 400);
+      }
     }
 
     // Verificar que el cliente existe
@@ -429,6 +441,24 @@ export const updateAppointment = async (
       throw new AppError('La hora de inicio debe ser anterior a la hora de fin', 400);
     }
 
+    // Validar que la fecha y hora de inicio no sean en el pasado (solo si se están actualizando)
+    if (date || startTime) {
+      const now = new Date();
+      
+      if (appointmentStartTime <= now) {
+        const appointmentDateOnly = new Date(appointmentDate);
+        appointmentDateOnly.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (appointmentDateOnly < today) {
+          throw new AppError('No se pueden programar citas en fechas pasadas', 400);
+        } else {
+          throw new AppError('No se pueden programar citas en horarios que ya han pasado. Por favor selecciona una hora futura', 400);
+        }
+      }
+    }
+
     // Verificar empleado si se especifica
     if (employeeId) {
       const employee = await prisma.employee.findUnique({
@@ -619,37 +649,109 @@ export const updateAppointmentStatus = async (
       throw new AppError(`No se puede cambiar el estado de ${existingAppointment.status} a ${status}`, 400);
     }
 
-    const updatedAppointment = await prisma.appointment.update({
-      where: { id },
-      data: { status },
-      include: {
-        client: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true
+    // Usar transacción para actualizar cita y crear historial si es necesario
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedAppointment = await tx.appointment.update({
+        where: { id },
+        data: { status },
+        include: {
+          client: {
+            include: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true
+                }
               }
             }
-          }
-        },
-        employee: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true
+          },
+          employee: {
+            include: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true
+                }
               }
             }
-          }
-        },
-        treatments: {
-          include: {
-            treatment: true
+          },
+          treatments: {
+            include: {
+              treatment: true
+            }
           }
         }
+      });
+
+      // Crear registro de historial médico para confirmación o cancelación
+      const treatmentNames = updatedAppointment.treatments.map(t => t.treatment.name).join(', ');
+      
+      console.log(`Cambio de estado: ${existingAppointment.status} -> ${status}`);
+      
+      // Verificar si ya existe un registro para esta cita específica
+      const existingRecord = await tx.medicalHistory.findFirst({
+        where: {
+          clientId: updatedAppointment.clientId,
+          notes: {
+            contains: `[CITA:${updatedAppointment.id}]`
+          }
+        }
+      });
+      
+      if (status === 'CONFIRMED' && existingAppointment.status !== 'CONFIRMED' && !existingRecord) {
+        // Cita confirmada
+        console.log('Creando registro de historial para cita confirmada');
+        await tx.medicalHistory.create({
+          data: {
+            clientId: updatedAppointment.clientId,
+            diagnosis: '',
+            treatment: treatmentNames,
+            notes: `[CITA:${updatedAppointment.id}] Cita confirmada el ${new Date().toLocaleDateString('es-ES')}. Tratamiento(s): ${treatmentNames}`,
+            attachments: '',
+            createdBy: req.user!.id
+          }
+        });
+      } else if (status === 'CANCELLED' && existingAppointment.status !== 'CANCELLED') {
+        // Cita cancelada (desde cualquier estado) - Solo si no estaba ya cancelada
+        console.log('Creando registro de historial para cita cancelada');
+        
+        // Verificar si ya existe un registro de cancelación para esta cita específica
+        const existingCancelRecord = await tx.medicalHistory.findFirst({
+          where: {
+            clientId: updatedAppointment.clientId,
+            notes: {
+              contains: `[CITA:${updatedAppointment.id}] Cita cancelada`
+            }
+          }
+        });
+        
+        if (!existingCancelRecord) {
+          console.log('No existe registro de cancelación previo, creando nuevo registro');
+          let cancelNote = '';
+          if (existingAppointment.status === 'CONFIRMED') {
+            cancelNote = `[CITA:${updatedAppointment.id}] Cita cancelada el ${new Date().toLocaleDateString('es-ES')}. La cita estaba confirmada. Tratamiento(s) que se iban a realizar: ${treatmentNames}. Motivo: Cancelación de cita confirmada.`;
+          } else {
+            cancelNote = `[CITA:${updatedAppointment.id}] Cita cancelada el ${new Date().toLocaleDateString('es-ES')}. Tratamiento(s) que se iban a realizar: ${treatmentNames}. Motivo: Cancelación de cita.`;
+          }
+          
+          await tx.medicalHistory.create({
+            data: {
+              clientId: updatedAppointment.clientId,
+              diagnosis: '',
+              treatment: treatmentNames,
+              notes: cancelNote,
+              attachments: '',
+              createdBy: req.user!.id
+            }
+          });
+          console.log('Registro de cancelación creado exitosamente');
+        } else {
+          console.log('Ya existe un registro de cancelación para esta cita');
+        }
       }
+
+      return updatedAppointment;
     });
 
     // Registrar auditoría
@@ -669,7 +771,7 @@ export const updateAppointmentStatus = async (
     const response: ApiResponse = {
       success: true,
       message: `Estado de cita actualizado a ${status}`,
-      data: { appointment: updatedAppointment }
+      data: { appointment: result }
     };
 
     res.json(response);

@@ -24,6 +24,7 @@ import { clientService, Client } from '../../services/clientService';
 import { employeeService, Employee } from '../../services/employeeService';
 import { treatmentService, Treatment } from '../../services/treatmentService';
 import Modal from '../Modal';
+import CompleteAppointmentModal from '../CompleteAppointmentModal';
 
 const Appointments: React.FC = () => {
   // Estados principales
@@ -36,6 +37,7 @@ const Appointments: React.FC = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   // Estados de datos
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -952,6 +954,19 @@ const Appointments: React.FC = () => {
                   Confirmar Cita
                 </button>
               )}
+              {(selectedAppointment.status === 'CONFIRMED' || selectedAppointment.status === 'IN_PROGRESS') && (
+                <button
+                  onClick={() => {
+                    setSelectedAppointment(selectedAppointment);
+                    setShowCompleteModal(true);
+                    setShowDetailsModal(false);
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-lg flex items-center transition-colors"
+                >
+                  <CheckCircleIcon className="h-4 w-4 mr-1" />
+                  Completar Cita
+                </button>
+              )}
             </div>
 
             {/* Client Info */}
@@ -1255,6 +1270,23 @@ const Appointments: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Modal para completar cita */}
+      {selectedAppointment && (
+        <CompleteAppointmentModal
+          isOpen={showCompleteModal}
+          onClose={() => {
+            setShowCompleteModal(false);
+            setSelectedAppointment(null);
+          }}
+          appointment={selectedAppointment as any}
+          onSuccess={() => {
+            fetchAppointments();
+            setShowCompleteModal(false);
+            setSelectedAppointment(null);
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -90,6 +90,28 @@ const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> = ({
     return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
   };
 
+  const validateDateTime = (date: string, time: string): string | null => {
+    if (!date || !time) return null;
+    
+    const appointmentDateTime = new Date(`${date}T${time}:00`);
+    const now = new Date();
+    
+    if (appointmentDateTime <= now) {
+      const appointmentDateOnly = new Date(date);
+      appointmentDateOnly.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (appointmentDateOnly < today) {
+        return 'No se pueden crear citas en fechas pasadas';
+      } else {
+        return 'No se pueden crear citas en horarios que ya han pasado. Por favor selecciona una hora futura';
+      }
+    }
+    
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -97,6 +119,13 @@ const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> = ({
 
     if (!formData.clientId || !formData.date || !formData.startTime) {
       toast.error('Por favor completa todos los campos obligatorios');
+      return;
+    }
+
+    // Validar fecha y hora
+    const dateTimeError = validateDateTime(formData.date, formData.startTime);
+    if (dateTimeError) {
+      toast.error(dateTimeError);
       return;
     }
 
@@ -244,8 +273,18 @@ const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> = ({
           </div>
         </div>
 
+        {/* Date/Time Validation Alert */}
+        {formData.date && formData.startTime && validateDateTime(formData.date, formData.startTime) && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-700 flex items-center gap-2">
+              <span className="text-red-500">⚠️</span>
+              <span className="font-medium">{validateDateTime(formData.date, formData.startTime)}</span>
+            </p>
+          </div>
+        )}
+
         {/* Calculated End Time */}
-        {formData.startTime && (
+        {formData.startTime && !validateDateTime(formData.date, formData.startTime) && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
             <p className="text-sm text-gray-700">
               <span className="font-medium">Hora de finalización estimada:</span>{' '}

@@ -78,6 +78,9 @@ model Client {
   appointments Appointment[]
   payments     Payment[]
   medicalHistory MedicalHistory[]
+  appointmentRecords AppointmentRecord[]
+  documents    Document[]
+  followUpPlans FollowUpPlan[]
 
   @@map("clients")
 }
@@ -98,6 +101,7 @@ model Employee {
   // Relaciones
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   appointments Appointment[]
+  appointmentRecords AppointmentRecord[]
 
   @@map("employees")
 }
@@ -117,6 +121,7 @@ model Treatment {
 
   // Relaciones
   appointments AppointmentTreatment[]
+  followUpPlans FollowUpPlan[]
 
   @@map("treatments")
 }
@@ -140,6 +145,7 @@ model Appointment {
   employee   Employee?              @relation(fields: [employeeId], references: [id])
   treatments AppointmentTreatment[]
   payments   Payment[]
+  record     AppointmentRecord?
 
   @@map("appointments")
 }
@@ -342,4 +348,162 @@ model SystemConfig {
   updatedAt   DateTime @updatedAt
 
   @@map("system_config")
+}
+
+// Registro detallado de cada cita completada
+model AppointmentRecord {
+  id            String   @id @default(cuid())
+  appointmentId String   @unique
+  clientId      String
+  employeeId    String
+  date          DateTime
+  
+  // Detalles del tratamiento
+  treatmentsPerformed Json     // Array de tratamientos con detalles específicos
+  results         String?      // Resultados obtenidos
+  observations    String?      // Observaciones del profesional
+  complications   String?      // Complicaciones o efectos secundarios
+  clientSatisfaction Int?      // Escala 1-5 de satisfacción
+  
+  // Seguimiento
+  requiresFollowUp Boolean @default(false)
+  followUpDate     DateTime?
+  followUpNotes    String?
+  
+  // Auditoría
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relaciones
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  client      Client      @relation(fields: [clientId], references: [id])
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+  photos      Photo[]
+  documents   Document[]
+  followUpPlans FollowUpPlan[]
+  
+  @@map("appointment_records")
+}
+
+// Fotos del tratamiento
+model Photo {
+  id        String   @id @default(cuid())
+  recordId  String
+  filename  String   // Nombre del archivo
+  originalName String // Nombre original
+  path      String   // Ruta del archivo
+  size      Int      // Tamaño en bytes
+  mimeType  String   // Tipo MIME
+  
+  // Metadatos
+  type      PhotoType // BEFORE, AFTER, DURING, RESULT
+  bodyArea  String?   // Área del cuerpo fotografiada
+  angle     String?   // Ángulo de la foto (frontal, lateral, etc.)
+  notes     String?   // Notas sobre la foto
+  
+  // Timestamps
+  takenAt   DateTime @default(now())
+  createdAt DateTime @default(now())
+  
+  // Relaciones
+  record AppointmentRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  
+  @@map("photos")
+}
+
+// Tipos de fotos
+enum PhotoType {
+  BEFORE    // Antes del tratamiento
+  DURING    // Durante el tratamiento
+  AFTER     // Inmediatamente después
+  RESULT    // Resultado final
+  FOLLOWUP  // Foto de seguimiento
+}
+
+// Documentos adjuntos
+model Document {
+  id        String   @id @default(cuid())
+  recordId  String?
+  clientId  String?  // Para documentos generales del cliente
+  filename  String
+  originalName String
+  path      String
+  size      Int
+  mimeType  String
+  
+  // Metadatos
+  type        DocumentType
+  description String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  uploadedBy String  // ID del usuario que subió
+  
+  // Relaciones
+  record AppointmentRecord? @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  client Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  @@map("documents")
+}
+
+// Tipos de documentos
+enum DocumentType {
+  CONSENT_FORM      // Consentimiento informado
+  MEDICAL_REPORT    // Reporte médico
+  PRESCRIPTION      // Prescripción
+  INSURANCE         // Documentos de seguro
+  IDENTIFICATION    // Identificación
+  OTHER            // Otros documentos
+}
+
+// Plan de seguimiento
+model FollowUpPlan {
+  id          String   @id @default(cuid())
+  clientId    String
+  recordId    String   // Registro que originó el seguimiento
+  treatmentId String   // Tratamiento que requiere seguimiento
+  
+  // Detalles del seguimiento
+  title       String   // Ej: "Retoque Botox zona frontal"
+  description String?
+  priority    FollowUpPriority @default(MEDIUM)
+  status      FollowUpStatus   @default(PENDING)
+  
+  // Fechas
+  scheduledDate DateTime
+  completedDate DateTime?
+  
+  // Configuración
+  reminderDays Int @default(7) // Días antes para recordatorio
+  isRecurring  Boolean @default(false)
+  recurringInterval Int? // Días entre repeticiones
+  
+  // Relaciones
+  client      Client           @relation(fields: [clientId], references: [id])
+  record      AppointmentRecord @relation(fields: [recordId], references: [id])
+  treatment   Treatment        @relation(fields: [treatmentId], references: [id])
+  
+  // Auditoría
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String
+  
+  @@map("follow_up_plans")
+}
+
+// Prioridades de seguimiento
+enum FollowUpPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// Estados de seguimiento
+enum FollowUpStatus {
+  PENDING     // Pendiente
+  SCHEDULED   // Programado
+  COMPLETED   // Completado
+  CANCELLED   // Cancelado
+  OVERDUE     // Vencido
 }
