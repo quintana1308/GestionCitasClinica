@@ -13,9 +13,72 @@ import {
   ArrowRightOnRectangleIcon,
 } from '@heroicons/react/24/outline';
 
+// Componente del logo de la clínica
+const ClinicLogo: React.FC = () => (
+  <div className="w-full h-full flex items-center justify-center px-2">
+    <img 
+      src="/logo-clinica.png" 
+      alt="Logo Clínica" 
+      className="h-12 w-auto max-w-full object-contain"
+      onError={(e) => {
+        // Fallback en caso de que no se encuentre la imagen
+        const target = e.target as HTMLImageElement;
+        target.style.display = 'none';
+        target.nextElementSibling?.classList.remove('hidden');
+      }}
+    />
+    {/* Fallback SVG si no se carga la imagen */}
+    <div className="hidden h-12 w-12 bg-white rounded-lg flex items-center justify-center shadow-sm">
+      <svg viewBox="0 0 40 40" className="h-10 w-10">
+        <defs>
+          <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ec4899" />
+            <stop offset="100%" stopColor="#be185d" />
+          </linearGradient>
+        </defs>
+        <circle cx="20" cy="20" r="18" fill="url(#logoGradient)" />
+        <path 
+          d="M20 8 L20 32 M8 20 L32 20" 
+          stroke="white" 
+          strokeWidth="3" 
+          strokeLinecap="round"
+        />
+        <circle cx="20" cy="20" r="6" fill="none" stroke="white" strokeWidth="2" />
+      </svg>
+    </div>
+  </div>
+);
+
 const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
+  
+  // Configuración fija de la clínica (personalización desactivada temporalmente)
+  const clinicName = 'Clínica Bella';
+
+  // Función para extraer nombres de roles
+  const getUserRoles = () => {
+    if (!user?.roles) return '';
+    
+    const roleNames = user.roles.map((roleObj: any) => {
+      // Manejar diferentes estructuras posibles
+      const roleName = roleObj.role?.name || roleObj.name || roleObj;
+      
+      // Convertir a texto más legible
+      switch (roleName) {
+        case 'admin':
+          return 'Administrador Sistema';
+        case 'employee':
+          return 'Empleado';
+        case 'client':
+          return 'Cliente';
+        default:
+          return roleName;
+      }
+    });
+    
+    return roleNames.join(', ');
+  };
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
@@ -39,17 +102,8 @@ const Sidebar: React.FC = () => {
   return (
     <div className="flex flex-col w-64 bg-white shadow-lg">
       {/* Logo */}
-      <div className="flex items-center justify-center h-16 px-4 bg-primary-600">
-        <div className="flex items-center">
-          <div className="flex-shrink-0">
-            <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <h1 className="text-white text-lg font-semibold">Clínica Bella</h1>
-          </div>
-        </div>
+      <div className="flex items-center justify-center h-20 px-4 bg-primary-600">
+        <ClinicLogo />
       </div>
 
       {/* Navigation */}
@@ -84,7 +138,7 @@ const Sidebar: React.FC = () => {
               {user?.firstName} {user?.lastName}
             </p>
             <p className="text-xs text-gray-500 capitalize">
-              {user?.roles?.join(', ')}
+              {getUserRoles()}
             </p>
           </div>
         </div>

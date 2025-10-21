@@ -76,6 +76,12 @@ export const dashboardService = {
     return response.data.data.appointments;
   },
 
+  // Obtener las citas más recientes
+  getRecentAppointments: async (limit: number = 5) => {
+    const response = await api.get(`/dashboard/appointments/recent?limit=${limit}`);
+    return response.data.data.appointments;
+  },
+
   // Obtener alertas del sistema
   getSystemAlerts: async (): Promise<SystemAlert[]> => {
     const response = await api.get('/dashboard/alerts');

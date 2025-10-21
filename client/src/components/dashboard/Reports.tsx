@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChartBarIcon, ArrowTrendingUpIcon, CalendarIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, ArrowTrendingUpIcon, CalendarIcon, UserGroupIcon, DocumentArrowDownIcon, TableCellsIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { dashboardService, DashboardStats } from '../../services/dashboardService';
 import { reportService, ReportFilters } from '../../services/reportService';
@@ -7,7 +7,8 @@ import { reportService, ReportFilters } from '../../services/reportService';
 const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   // Obtener el primer y último día del mes actual
   const getDefaultDates = () => {
@@ -26,8 +27,24 @@ const Reports: React.FC = () => {
     ...getDefaultDates()
   });
 
-  // Calcular datos derivados de stats
-  const monthlyRevenue = stats?.revenue.monthlyData || [];
+  // Función para formatear el nombre del mes
+  const formatMonthName = (monthString: string) => {
+    const [year, month] = monthString.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('es-ES', { 
+      month: 'long',
+      year: 'numeric'
+    });
+  };
+
+  // Calcular datos derivados de stats - solo meses con ingresos
+  const monthlyRevenue = (stats?.revenue.monthlyData || [])
+    .filter(data => data.revenue > 0) // Solo meses con ingresos
+    .map(data => ({
+      ...data,
+      monthName: formatMonthName(data.month)
+    }));
+  
   const treatmentPopularity = stats?.popularTreatments.map((t, index, arr) => ({
     name: t.name,
     count: t.appointmentCount,
@@ -109,23 +126,43 @@ const Reports: React.FC = () => {
     toast.success('Filtros aplicados');
   };
 
-  const handleGenerateReport = async () => {
+  const handleExportPDF = async () => {
     // Prevenir múltiples clics
-    if (exporting) return;
+    if (exportingPDF) return;
     
     try {
-      setExporting(true);
-      console.log('Generando reportes...');
-      await reportService.generateReport(filters);
-      toast.success('Reportes descargados: PDF y Excel', {
+      setExportingPDF(true);
+      console.log('Generando reporte PDF...');
+      await reportService.exportFinancialPDF(filters);
+      toast.success('Reporte PDF descargado exitosamente', {
+        duration: 4000,
+        icon: '📄'
+      });
+    } catch (err: any) {
+      console.error('Error generating PDF report:', err);
+      toast.error('Error al generar reporte PDF');
+    } finally {
+      setExportingPDF(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    // Prevenir múltiples clics
+    if (exportingExcel) return;
+    
+    try {
+      setExportingExcel(true);
+      console.log('Generando reporte Excel...');
+      await reportService.exportClientsExcel(filters);
+      toast.success('Reporte Excel descargado exitosamente', {
         duration: 4000,
         icon: '📊'
       });
     } catch (err: any) {
-      console.error('Error generating report:', err);
-      toast.error('Error al generar reportes');
+      console.error('Error generating Excel report:', err);
+      toast.error('Error al generar reporte Excel');
     } finally {
-      setExporting(false);
+      setExportingExcel(false);
     }
   };
 
@@ -146,14 +183,24 @@ const Reports: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Reportes y Análisis</h1>
           <p className="text-gray-600">Estadísticas y métricas del negocio</p>
         </div>
-        <button 
-          onClick={handleGenerateReport}
-          disabled={exporting}
-          className="btn-primary flex items-center"
-        >
-          <ChartBarIcon className="h-5 w-5 mr-2" />
-          {exporting ? 'Generando...' : 'Generar Reporte'}
-        </button>
+        <div className="flex space-x-3">
+          <button 
+            onClick={handleExportPDF}
+            disabled={exportingPDF}
+            className="btn-primary flex items-center"
+          >
+            <DocumentArrowDownIcon className="h-5 w-5 mr-2" />
+            {exportingPDF ? 'Generando...' : 'Exportar PDF'}
+          </button>
+          <button 
+            onClick={handleExportExcel}
+            disabled={exportingExcel}
+            className="btn-secondary flex items-center"
+          >
+            <TableCellsIcon className="h-5 w-5 mr-2" />
+            {exportingExcel ? 'Generando...' : 'Exportar Excel'}
+          </button>
+        </div>
       </div>
 
       {/* Date Range Filter */}
@@ -266,23 +313,32 @@ const Reports: React.FC = () => {
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Ingresos Mensuales</h3>
           <div className="space-y-4">
-            {monthlyRevenue.map((data, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <span className="text-sm font-medium text-gray-700 w-8">{data.month}</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-2 w-32">
-                    <div 
-                      className="bg-primary-600 h-2 rounded-full" 
-                      style={{ width: `${(data.revenue / 7000) * 100}%` }}
-                    ></div>
+            {monthlyRevenue.length > 0 ? (
+              monthlyRevenue.map((data, index) => {
+                const maxRevenue = Math.max(...monthlyRevenue.map(d => d.revenue), 1);
+                return (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm font-medium text-gray-700 w-32 capitalize">{data.monthName}</span>
+                      <div className="flex-1 bg-gray-200 rounded-full h-3 w-32">
+                        <div 
+                          className="bg-primary-600 h-3 rounded-full transition-all duration-300" 
+                          style={{ width: `${Math.max((data.revenue / maxRevenue) * 100, 2)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-900">${Number(data.revenue).toLocaleString()}</div>
+                      <div className="text-xs text-gray-500">{stats?.appointments.monthly || 0} citas</div>
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium text-gray-900">${Number(data.revenue).toLocaleString()}</div>
-                  <div className="text-xs text-gray-500">{stats?.appointments.monthly || 0} citas</div>
-                </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>No hay ingresos registrados aún</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -290,23 +346,34 @@ const Reports: React.FC = () => {
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Tratamientos Más Populares</h3>
           <div className="space-y-4">
-            {treatmentPopularity.map((treatment, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <span className="text-sm font-medium text-gray-700 flex-1">{treatment.name}</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-2 w-24">
-                    <div 
-                      className="bg-green-500 h-2 rounded-full" 
-                      style={{ width: `${treatment.percentage * 2.5}%` }}
-                    ></div>
+            {treatmentPopularity.length > 0 ? (
+              treatmentPopularity.map((treatment, index) => {
+                const maxCount = Math.max(...treatmentPopularity.map(t => t.count), 1);
+                return (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700 flex-1">
+                        {treatment.name}
+                      </span>
+                      <div className="text-right ml-4">
+                        <div className="text-sm font-medium text-gray-900">{treatment.count} citas</div>
+                        <div className="text-xs text-gray-500">{treatment.percentage}%</div>
+                      </div>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div 
+                        className="bg-green-500 h-3 rounded-full transition-all duration-300" 
+                        style={{ width: `${Math.max((treatment.count / maxCount) * 100, 5)}%` }}
+                      ></div>
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium text-gray-900">{treatment.count}</div>
-                  <div className="text-xs text-gray-500">{treatment.percentage}%</div>
-                </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>No hay datos de tratamientos disponibles</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

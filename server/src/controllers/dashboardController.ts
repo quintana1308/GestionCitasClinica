@@ -422,6 +422,65 @@ export const getSystemAlerts = async (
   }
 };
 
+// Obtener citas más recientes
+export const getRecentAppointments = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const limit = Number(req.query.limit) || 5;
+
+    const appointments = await prisma.appointment.findMany({
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        client: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                phone: true
+              }
+            }
+          }
+        },
+        employee: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        },
+        treatments: {
+          include: {
+            treatment: {
+              select: {
+                name: true,
+                duration: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const response: ApiResponse = {
+      success: true,
+      message: 'Citas más recientes obtenidas exitosamente',
+      data: { appointments }
+    };
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Obtener resumen de actividad reciente
 export const getRecentActivity = async (
   req: AuthenticatedRequest,
